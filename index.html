@@ -1,671 +1,479 @@
 <!DOCTYPE html>
 <html>
-    <head>
+    <head><meta charset="UTF-8">
         <title>The Snake</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         
 <script src="https://www.gstatic.com/firebasejs/3.6.6/firebase.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
-<script src="https://code.jquery.com/ui/1.10.4/jquery-ui.js"></script>
-<link href="https://code.jquery.com/ui/1.10.4/themes/ui-lightness/jquery-ui.css" rel="stylesheet">
         <link rel="stylesheet" href="css.css">
-        
-
-<script src="https://rawgit.com/bureyburey/Scoreboard-Module/master/scoreboard.js"></script>
 
  </head>
-<body id='bdy' onload='ol();'>
- <div id='fc'>
+<body id='bdy'>
+    <div id='fc'>
+        <div class="game-info">
+            <div id='fpsc'>0 FPS</div>
+            <div id='score'>Lvl 0 Score </br>0</div>
+            <div id='leng'>Length </br>0</div>
+        </div>
 
-   <canvas id='canvas1'></canvas>
-    
-<input type='button' id='leftb' value='Left' onclick='changedir("left")'></input>
-<input type='button' id='upb' value='Up' onclick='changedir("up")'></input>
-<input type='button' id='downb' value='Down' onclick='changedir("down")'></input>
-<input type='button' id='rightb' value='Right' onclick='changedir("right")'></input>
-   
- </div>
- 
- <div id='fpsc'>0</div>
- <div id='leng'>Snake's Length 0</div>
- <span id='score'>0</span>
+        <canvas id='canvas1'></canvas>
+        <div id='pbutton'>Pause</div>
 
- <div id='pbutton' onclick='playstatef();'>Play</div>
- 
-  <div id='show_scoreboard' onclick='scoreboard.showScoreBoard();'>Scoreboard</div>
-  
- <div id='sets'>
- 
- <div id='colordiv'>Snake Color Style</div>
- 
- <select id='colorstyle'>
- <option>1 Color</option>
- <option>Random Color When Eating Food</option>
- <option>Random Color Every Move</option>
- <option>Random Color On Click</option>
- <option>Random Color Every Frame</option>
- </select>
- 
- <div id='selectcolord'>Snake Color&nbsp&nbsp&nbsp
- <input type='color' id='selectcolor' value='#9910ff'></input>
- </div>
- 
- <div id='sstyle'>Snake Style &nbsp&nbsp&nbsp
- <select id='ssstyle'>
- <option>Boxes</option>
- <option>Normal</option>
- <option>Circle</option>
- </select>
- </div>
- 
- <input type='button' id='startb' value='Apply' onclick='applysets()'></input>
- 
- <span id='fcs'>Food Color Style</br></br>
- <select id='fcsse'>
- <option>Color</option>
- <option>Random Color</option>
- <option>Random Color Every Frame</option>
- <option>Same As The Snake</option>
- </select></br></br>
- Food Color &nbsp<input type='color' id='fce' value='#9010ff'></input>
- </span>
- 
- </div>
- 
- <button id='hackb' onclick='hacktap();'>Hack</button>
- 
- <div id='hackd'>
+        <div class="controls-container">
+            <button id='upb' class='control-button'>Up</button>
+            <button id='leftb' class='control-button'>Left</button>
+            <button id='downb' class='control-button'>Down</button>
+            <button id='rightb' class='control-button'>Right</button>
+        </div>
+    </div>
 
- <div id='lengthd'>Length: 4</div>
- <input type='range' id="lengthe" onchange='changelength(this.value);' value='4' min='4' max='75'></input>
- 
- 
- <div id='speedd'>Speed: 250</div>
- <input type='range' id="speede" onchange='changespeed(this.value)' value='250' min='40' max='250'></input>
- 
- <input type='button' id='applyhack' value='Apply' onclick='hacktap();'></input>
- 
- </div>
- </div>
- <script type='text/javascript'>
+    <div id='sets'>
+        <h2>Settings</h2>
 
- alert('I Made My First Multiplayer Game In SoloLearn, pls Go Check It Out, It Called: MultiPlayer OnlineGame.')
- //convert how much pixel per 1% of the screen (px/1%) so it can run on every things (resolutions)
-function ptp(type,value) {
-var v,fc=f('fc'),g =fc.getBoundingClientRect();
-switch (type) {
-   case 0 :
-   return Math.round((g.right / 100) * value);
-   break;
-   case 1 :
-   return Math.round((g.bottom / 100) * value );
-   break;
-   case 2 :
-   return Math.round(((g.right+g.bottom) / 100) * value );
-   break;
-  }
-}
+        <div class="setting-group">
+            <label for="colorstyle">Snake Color Style</label>
+            <select id='colorstyle'>
+                <option>1 Color</option>
+                <option>Random Color When Eating Food</option>
+                <option>Random Color Every Move</option>
+                <option>Random Color On Click</option>
+                <option>Random Color Every Frame</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label for="selectcolor">Snake Color</label>
+            <input type='color' id='selectcolor' value='#9910ff'>
+        </div>
 
-//random number
-function rn(min,max) {
-return Math.floor(Math.random()*(max-min)+min);
-}
- 
- //random color number
-var r=0,g=0,b=0,ra;
-function rc(type,min,max,v) {
-ra=[];
- for(var rf=0;rf<3;rf++) {
-    ra[rf]=rn(min,max);
-  }
- if(type=='hex') {
-    return '#'+ra[0]+ra[1]+ra[2];
-  }
-  else {return 'rgb('+ra[0]+','+ra[1]+','+ra[2]+')';}
-    
-  if(v==1) {r=ra[0];g=ra[1];b=[2];}
-}
- 
- 
- 
- //create food
-var xy=[];
-function food() {
-xy[0]=rn(ptp(0,7),ptp(0,90));
-xy[1]=rn(ptp(1,7),ptp(1,70));
-fsclx=rn(ptp(0,2),ptp(0,6));
-fscly=rn(ptp(1,2),ptp(1,6));
+        <div class="setting-group">
+            <label for="sstyle-select">Snake Style</label>
+            <select id='sstyle-select'>
+                <option>Boxes</option>
+                <option>Normal</option>
+                <option>Circle</option>
+            </select>
+        </div>
 
-if(xy[0]%2!=0) {xy[0]++;}
-if(xy[1]%2!=0) {xy[1]++;}
-if(fsclx<ptp(0,3.7)) {fsclx=ptp(0,3.7)}
-if(fscly<ptp(1,3.7)) {fscly=ptp(1,3.7)}
-for(var m=0;m<len;m++) {
-if(((sposx[m]>=xy[0]) && (sposx[m]<=xy[0]+fsclx) && (sposy[m]>=xy[1]) && (sposy[m]<=xy[1]+fscly)) || ((sposx[m]+sclx>=xy[0]) && (sposx[m]+sclx<=xy[0]+fsclx) && (sposy[m]+scly>=xy[1]) && (sposy[m]+scly<=xy[1]+fscly))){
+        <hr id="sline">
 
-food();
-  }
- }
-}
-     
-     
-//move speed function
-var sif;
-function msf(msp,on) {
- if(on) {
-   clearInterval(sif);
-   sif = setInterval(ms, msp);
- }
- else {clearInterval(sif);}
-}
+        <div class="setting-group">
+            <label for="fcsse">Food Color Style</label>
+            <select id='fcsse'>
+                <option>Color</option>
+                <option>Random Color</option>
+                <option>Random Color Every Frame</option>
+                <option>Same As The Snake</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label for="fce">Food Color</label>
+            <input type='color' id='fce' value='#9010ff'>
+        </div>
 
-//check the progress
-var pr=[];
-var levels=75,lp=1;
-for(var pf=0;pf<50;pf++) {
-pr[pf]=levels;
-lp+=2;
-levels +=75+lp;
-}
+        <button id='startb'>Apply</button>
+    </div>
 
-function prog() {
-if(score > pr[level]){
-movespeed-=4;
-msf(movespeed, playstate);
-level++;
-}}
+    <script type='text/javascript'>
+(function() { // IIFE to avoid global scope pollution
 
-var scolor='#ccc';
-function scolori() {scolor=rc('rgb',40, 255);}
-var fcsc=0;
-function fcolori() {
-if(fcsc==1) {fcolor=scolor;}
-else {fcolor =rc('rgb',50,255);}
-}
+    // --- DOM Elements ---
+    const dom = {
+        canvas: document.getElementById('canvas1'),
+        fc: document.getElementById('fc'),
+        fpsc: document.getElementById('fpsc'),
+        leng: document.getElementById('leng'),
+        score: document.getElementById('score'),
+        pButton: document.getElementById('pbutton'),
+        sets: document.getElementById('sets'),
+        startB: document.getElementById('startb'),
+        leftB: document.getElementById('leftb'),
+        upB: document.getElementById('upb'),
+        downB: document.getElementById('downb'),
+        rightB: document.getElementById('rightb'),
+        colorStyle: document.getElementById('colorstyle'),
+        selectColor: document.getElementById('selectcolor'),
+        sstyleSelect: document.getElementById('sstyle-select'),
+        fcsse: document.getElementById('fcsse'),
+        fce: document.getElementById('fce')
+    };
 
-var mpi2=Math.PI*2;
-function cshape(type,nI) {
- if(type=='circle') {
-return cx.arc(sposx[nI],sposy[nI],r,mpi2,false);}
- else {
-return cx.fillRect(sposx[nI],sposy[nI],sclx,scly);
- }
-}
+    const ctx = dom.canvas.getContext('2d');
 
-//var scoreboard;
-function ol() {
+    // --- Game State and Settings ---
+    const game = {
+        snake: {
+            body: [],
+            sclx: 0,
+            scly: 0,
+            r: 0,
+            speedX: 0,
+            speedY: 0,
+            shape: 'box',
+            color: '#9910ff',
+        },
+        food: {
+            x: 0,
+            y: 0,
+            sclx: 0,
+            scly: 0,
+            color: '#9010ff',
+        },
+        score: 0,
+        level: 0,
+        moveSpeed: 250,
+        initialMoveSpeed: 250,
+        direction: 'right',
+        lastDirection: 'right',
+        paused: true,
+        gameOver: true,
+        settings: {
+            colorStyle: '1 Color',
+            foodColorStyle: 'Color',
+            snakeStyle: 'Boxes',
+            frameRate: 10, // for color updates
+        },
+        intervals: {
+            move: null,
+            color: null,
+            foodColor: null
+        },
+        progressLevels: []
+    };
 
-//scoreboard = new Scoreboard();
- //update the snake place (move)
- msf(movespeed,playstate);
- //the fps counter
- setInterval(clearfpss, 500);
- //the graphics(the whole canvas)
- setInterval(update, fds);
- //check the progress(score) /3s
- setInterval(prog, 3000)
- food();
- cx.stroke();
- 
-hacktap();
-playstatef();
-updatedivvalues();
-}
-
-function changespeed(v) {
-movespeed=v;
-msf(movespeed, playstate);
-updatedivvalues();}
+    // --- Constants ---
+    const INITIAL_SNAKE_LENGTH = 4;
+    const SNAKE_SPEED_X_BOX = 4.1;
+    const SNAKE_SPEED_Y_BOX = 4.0; // This is unused, can be removed
+    const PI_2 = Math.PI * 2;
 
 
-/* color:#e0d0ff
-   border:1px solid #7710bb
-   box-shadow:0px 0px 1px 1px #9910ff,
-   inset 0px 0px 2px white
-   border-radius:40px
-   background:-webkit-radial-gradient(rgba(150,10,255,0.7) 30%,rgba(75,5,150,0.2))*/
-var options2={
-"scoreboardWidth":"auto",
-"scoreboardHeight":"400",
-"submitDialogWidth":"auto",
-"submitDialogHeight":"auto",
-burey:{//Scoreboard Module By Burey text
-"font-family":"Times New Roman",
-"font-style":"italic",
-'border':'1px solid #7710bb',
-'box-shadow':'0px 0px 1px #9910ff, inset 0px 0px 3px white',
-"text-shadow": "0px 0px 1px #e0d0ff",
-"color":"#e0d0ff",
-'text-align':'center',
-"background-color":"-webkit-radial-gradient(rgba(150,10,255,0.7) 30%,rgba(75,5,150,0.2))"
-},
-dialogTitle:{// dialogs title bar
-"font-family":"Times New Roman",
-"border":"1px solid #7710bb",
-"box-shadow":"0px 0px 2px 1px #9910ff, inset 0px 0px 3px white",
-"text-shadow": "0px 0px 1px #e0d0ff",
-"color":"#e0d0ff",
-"text-align":"center",
-"background":"-webkit-radial-gradient(rgba(150,10,255,0.7) 30%,rgba(100,10,200,0.3))"
-},
-scoreboardContainer:{//scoreboard container dialog
-"border":"2px solid #9910ff",
-"border-radius":"4%",
-"box-shadow":"0px 0px 10px #7710ff",
-"background-color":"rgba(0,0,0,0)"
-},
-tableHeader:{//# Name Score Time
-"font-family":"Times New Roman",
-"border":"1px solid #7710bb",
-"box-shadow":"0px 0px 2px #9910ff, inset 0px 0px 3px white",
-"text-shadow": "0px 0px 1px #e0d0ff",
-"color":"#e0d0ff",
-"text-align":"center",
-"background-color":"-webkit-radial-gradient(rgba(150,10,255,0.7) 30%,rgba(75,5,150,0.2))"
-},
-scorePosition:{// #
-"font-family":"Times New Roman",
-"text-shadow":"0px 0px 1px #9910ff",
-"color":"#e0d0ff"
-},
-scoreName:{//name of user
-"font-family":"Times New Roman",
-"text-shadow":"0px 0px 1px #9910ff",
-"color":"#e0d0ff",
-"word-wrap": "break-word",
-"max-width":"110px"
-},
-scoreValue:{//score value
-"font-family":"Times New Roman",
-"font-size":"15px",
-"text-shadow":"0px 0px 1px #9910ff",
-"color":"#e0d0ff"
-},
-scoreTime:{// time + date
-"font-family":"Times New Roman",
-"font-size":"12px",
-"text-shadow":"0px 0px 1px #9910ff",
-"color":"#e0d0ff"
-},
-newScoreContainer:{//submit new score dialog
-"border":"2px solid #9910ff",
-"border-radius":"15px",
-"box-shadow":"0px 0px 5px #7710ff, inset 0px 0px 7px 1px white",
-"background":"-webkit-linear-gradient(top,rgba(140,10,255,0.7),rgba(100,10,175,0.3))"
-},
-scoreYourScoreLabel:{
-// 'Your Score:' text in new score dialog
-"font-family":"Times New Roman",
-"text-shadow":"0px 0px 1px #9910ff",
-"color":"#e0d0ff"
-},
-scoreValueLabel:{
-//score value in new score dialog
-"font-family":"Times New Roman",
-"text-shadow":"0px 0px 1px #9910ff",
-"color":"#e0c0ff",
-"margin-right":"25px"
-},
-scoreErrorLabel:{
-//error label in new score dialog
-"font-family":"Times New Roman",
-"color": "red"
-},
-scoreboardButtons:{
-//scoreboard dialog buttons
-"font-family":"Times New Roman",
-"display":"none" // remove button
-},
-newScoreButtons:{
-//new score dialog buttons
-"font-family":"Times New Roman",
-"text-shadow":"0px 0px 1px #9910ff",
-"color":"#e0d0ff",
-"border":"1px solid #9910ff",
-"border-radius":"20px",
-"box-shadow":"0px 0px 3px #7710ff, inset 0px 0px 3px 1px white",
-"background":"-webkit-radial-gradient(rgba(140,10,255,0.6) 50%,rgba(100,10,150,0.3))"
-},
-loaderOptions:{
-//scoreboard loading animation
-"border-bottom": "16px solid #888", // Light grey 
-"border-top": "16px solid #888", // Light grey 
-"border-right": "16px solid #9910ff",
-"border-left": "16px solid #9910ff",
-"margin-left": "auto",
-"margin-right": "auto"
-}
-};
+    // --- Utility Functions ---
+    function ptp(type, value) { // Percentage To Pixels
+        // Now based on the canvas size for more reliable positioning
+        const width = dom.canvas.width;
+        const height = dom.canvas.height;
+        switch (type) {
+            case 0: return (width / 100) * value;
+            case 1: return (height / 100) * value;
+            case 2: return ((width + height) / 2 / 100) * value;
+            default: return 0;
+        }
+    }
 
-var scoreboard = null;
-$(document).ready(function() {
- scoreboard = new Scoreboard(options2)
-});
+    function rn(min, max) {
+        return Math.floor(Math.random() * (max - min)) + min;
+    }
+
+    function randomColor() {
+        return `rgb(${rn(40, 255)},${rn(40, 255)},${rn(40, 255)})`;
+    }
 
 
+    // --- Game Setup and Initialization ---
+    function initSnake() {
+        game.snake.body = [];
+        const startX = ptp(0, 20);
+        const startY = ptp(1, 50); // Center vertically
+        game.snake.sclx = ptp(0, 3.8);
 
- 
- function f(id) {return document.getElementById(id);}
- 
- //the snake position X&Y
- var sposx =new Array();
- sposx[0] =ptp(0,10);
- 
- var sposy =new Array();
- sposy[0] =ptp(1,10);
- 
- var sclx=ptp(0,3.8),scly=ptp(1,3.8),r=ptp(2,1),speedx=4.1,speedy=4,score=0,movespeed=250,level=0,dms=250,fsclx=0,fscly=0,playstate=0,fds=10,coloreveryframe=0,fcolor='#fff',cwef,cwed,coc,cem,sshape='box',scoreArr=[],scoreSum=0;
- 
- var len=4,sdir='right',lastdir ='right';
+        for (let i = 0; i < INITIAL_SNAKE_LENGTH; i++) {
+            game.snake.body.push({
+                x: startX - (i * game.snake.sclx),
+                y: startY
+            });
+        }
+    }
 
- //change the direction
-function changedir(dir) {
-lastdir=sdir;
-switch(dir) {
- case 'right' :
- if(lastdir!='left') {sdir=dir}
- break;
-    
- case 'left' :
- if(lastdir!='right') {sdir=dir}
- break;
-    
- case 'up' :
- if(lastdir!='down') {sdir=dir}
- break;
-    
- case 'down' :
- if(lastdir!='up') {sdir=dir}
- break;
- }
- if(coc) {scolor=rc('rgb',50,255);}
-}
- 
-var c=f('canvas1');c.width=ptp(0,100);c.height=ptp(1,80);
- var cx=c.getContext('2d'),cxy=f('fc').getBoundingClientRect();
- 
- //whene loss
- function death() {
- 
- for(var i=0;i<scoreArr.length;i++) {
-    scoreSum+=scoreArr[i];
- }
- if(scoreSum==score) {scoreboard.submitNewScoreDialog(score);}
- else {alert('cheater, nice try tho.')}
-var speedd=f('speedd'),lengthd=f('lengthd'),lengthe=f('lengthe'),speede=f('speede');
- 
- playstatef();
-    movespeed=dms;
-    level=0;
-    len = 3;
-    sposx.splice(1,sposx.length);
-    sposy.splice(1,sposy.length);
-    score = 0,scoreArr=[];
-    scoreSum=0;
-    updatedivvalues();
- }
- 
- 
- //move the snake//
- var lpx=0,lpy=1;
- function ms() {
- lpx=sposx[1];
- lpy=sposy[1];
- for (var g=len;g>0;g--) {
-    sposx[g]=sposx[g-1];
-    sposy[g]=sposy[g-1];
- }
- 
+    function calculateProgressLevels() {
+        let levels = 75;
+        let lp = 1;
+        for (let i = 0; i < 50; i++) {
+            game.progressLevels[i] = levels;
+            lp += 2;
+            levels += 75 + lp;
+        }
+    }
 
- //wich direction
-    switch (sdir) {
-       case 'right' :
-       if(sposx[0]<=cxy.right) {
-       sposx[0]+=ptp(0,speedx);
-       } else {sposx[0]=0;changedir('right')}
-       break;
-       
-       case 'left' :
-       if(sposx[0]>=0) {
-       sposx[0]-=ptp(0,speedx);
-       } else {sposx[0]=cxy.right;changedir('left')}
-       break;
-       
-       case 'up' :
-       if(sposy[0]>=0) {
-       sposy[0]-=ptp(1,speedy);
-       } else {sposy[0]=cxy.bottom;changedir('up')}
-       break;
-       
-       case 'down' :
-       if(sposy[0]<=cxy.bottom) {
-       sposy[0]+=ptp(1,speedy);
-       } else {sposy[0]=0;changedir('down');}
-       break;
+    function resetGame() {
+        game.gameOver = false;
+        game.paused = true;
+        game.score = 0;
+        game.level = 0;
+        game.moveSpeed = game.initialMoveSpeed;
+        game.direction = 'right';
+        game.lastDirection = 'right';
+        
+        initSnake();
+        spawnFood();
+        updateUI();
+
+        dom.pButton.style.visibility = 'hidden';
+        dom.sets.style.visibility = 'visible';
+        dom.pButton.innerHTML = 'Play';
+    }
+
+    // --- Drawing ---
+    function draw() {
+        ctx.clearRect(0, 0, dom.canvas.width, dom.canvas.height);
+        
+        // Draw Food
+        ctx.fillStyle = game.food.color;
+        ctx.shadowColor = game.food.color;
+        ctx.shadowBlur = 15;
+        ctx.fillRect(game.food.x, game.food.y, game.food.sclx, game.food.scly);
+        
+        // Draw Snake
+        ctx.fillStyle = game.snake.color;
+        ctx.shadowBlur = 0;
+        game.snake.body.forEach(segment => {
+            ctx.beginPath();
+            if (game.snake.shape === 'circle') {
+                ctx.arc(segment.x + game.snake.r, segment.y + game.snake.r, game.snake.r, 0, PI_2);
+            } else {
+                ctx.rect(segment.x, segment.y, game.snake.sclx, game.snake.scly);
+            }
+            ctx.fill();
+        });
+    }
+
+    // --- Game Logic ---
+    function spawnFood() {
+        let validPosition = false;
+        let x, y, sclx, scly;
+
+        while (!validPosition) {
+            validPosition = true;
+            // Align food to the same grid as the snake
+            x = Math.floor(rn(0, dom.canvas.width / game.snake.sclx)) * game.snake.sclx;
+            y = Math.floor(rn(0, dom.canvas.height / game.snake.scly)) * game.snake.scly;
+            sclx = game.snake.sclx;
+            scly = sclx; // Keep food square
+
+            // Check if food spawns on the snake
+            for (const segment of game.snake.body) {
+                if (x < segment.x + game.snake.sclx && x + sclx > segment.x &&
+                    y < segment.y + game.snake.scly && y + scly > segment.y) {
+                    validPosition = false;
+                    break;
+                }
+            }
+        }
+        game.food = { x, y, sclx, scly, color: game.food.color };
     }
     
-     //check if the snake ate the food
-if(((sposx[0]>=xy[0]) && (sposx[0]<=xy[0]+fsclx) && (sposy[0]>=xy[1]) && (sposy[0]<=xy[1]+fscly)) || ((sposx[0]+sclx>=xy[0]) && (sposx[0]+sclx<=xy[0]+fsclx) && (sposy[0]+scly>=xy[1]) && (sposy[0]+scly<=xy[1]+fscly))){
-   
-      len++;
-      food();
-      updatedivvalues();
-    if(cwef) {scolori();}
-    if(cwed) {fcolori();}
- AddScore=fsclx-Math.floor(rn(1,6));
-   score+=AddScore;
-   scoreArr[scoreArr.length]=AddScore;
-   prog();
- }
-      
-      
-//check first box(snake) if crash with the tailes
-      for(var t=2;t<=len;t++) {
-         if(sposx[0]==sposx[t] && sposy[0]==sposy[t]) {
-         death();
-         }
-       }
+    function moveSnake() {
+        if (game.paused || game.gameOver) return;
 
-   
-   if(cem) {scolor=rc('rgb', 30, 255);}
-f('score').innerHTML='lvl &nbsp&nbspScore </br>&nbsp'+level+'&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp'+Math.round(score);
-}
+        const head = { x: game.snake.body[0].x, y: game.snake.body[0].y };
 
+        const speed = game.snake.sclx; // Move one block at a time
 
- var fpsc=f('fpsc'),fpss=0,ctin=0;
-function update() {
+        switch (game.direction) {
+            case 'right': head.x += speed; break;
+            case 'left': head.x -= speed; break;
+            case 'up': head.y -= speed; break;
+            case 'down': head.y += speed; break;
+        }
+        game.lastDirection = game.direction;
 
-cx.clearRect(0,0,c.width,c.height);
-//draw all the avialable boxes(snakes)
-for (var i=0;i<=len;i++) {
+        // Wall collision check
+        if (head.x < 0 || head.x + game.snake.sclx > dom.canvas.width || head.y < 0 || head.y + game.snake.scly > dom.canvas.height) {
+            handleDeath();
+            return;
+        }
+        
+        game.snake.body.unshift(head);
 
-cx.beginPath();
-cx.fillStyle=scolor;
-cx.shadowBlur=0;
-cshape(sshape, i);
-cx.fill();
-cx.closePath();
- }
- 
- //draw the food
- cx.beginPath();
- cx.fillStyle=fcolor;
- cx.shadowColor=fcolor;
- cx.shadowBlur=rn(5,25);
- cx.fillRect(xy[0],xy[1],fsclx,fscly)
-cx.closePath();
+        if (head.x < game.food.x + game.food.sclx && head.x + game.snake.sclx > game.food.x &&
+            head.y < game.food.y + game.food.scly && head.y + game.snake.scly > game.food.y) { // Food collision
+            
+            game.score += 10;
+            checkProgress();
+            spawnFood();
+            
+            if (game.settings.colorStyle === 'Random Color When Eating Food') game.snake.color = randomColor();
+            if (game.settings.foodColorStyle === 'Random Color') game.food.color = randomColor();
+        } else {
+            game.snake.body.pop();
+        }
+        
+        // Self-collision check
+        for (let i = 1; i < game.snake.body.length; i++) {
+            if (Math.abs(head.x - game.snake.body[i].x) < 1 && Math.abs(head.y - game.snake.body[i].y) < 1) {
+                handleDeath();
+                return;
+            }
+        }
 
- fpss++;
- }
-
- function clearfpss() {
- fpsc.innerHTML=(fpss*2)+' FPS';
- fpss=0;
- }
- 
-
- 
- var scd=f('selectcolor'), q=f('colorstyle'),sstyle=f('ssstyle'),sets=f('sets'),fcsse=f('fcsse'),fce=f('fce'),fci=0;
- function applysets() {
-
-    sets.style.visibility='hidden';
-    if(scd.value=='#000000') {scd.value='#ffffff';}
-    
-    switch(q.value) {
-    case '1 Color' :
-    cwef=0,cem=0,coc=0;
-    clearInterval(ctin);
-    scolor=scd.value;
-    break;
-    case 'Random Color When Eating Food' :
-    coc=0,cem=0,cwef=1;
-    clearInterval(ctin);
-    break;
-    case 'Random Color Every Move' :
-    cwef=0,coc=0,cem=1;
-    clearInterval(ctin);
-    break;
-    case 'Random Color On Click' :
-    cwef=0,cem=0,coc=1;
-    clearInterval(ctin);
-    break;
-    case 'Random Color Every Frame' :
-    cwef=0,cem=0,coc=0;
-    clearInterval(ctin);
-    ctin=setInterval(scolori, fds);
-    break;
-     default :
-     scolori(0);
+        if (game.settings.colorStyle === 'Random Color Every Move') game.snake.color = randomColor();
+        updateUI();
     }
     
-    if(sstyle.value =='Boxes') {
-        speedx=4.1;
-        speedy=4;
-        sshape='box';
-    }
-    else if(sstyle.value=='Normal'){
-       speedx=3.8;
-       speedy=3.7;
-       sshape='box';
-    }
-    else {
-   speedx=4;
-   speedy=3.2;
-    sshape='circle';
-    }
- 
-    
-    switch(fcsse.value) {
-       
-       case 'Color' :
-       cwed=0,fcsc=0;
-       fcolor=fce.value;
-       clearInterval(fci);
-       break;
-       case 'Random Color' :
-       cwed=1,fcsc=0;
-       fcolori();
-       clearInterval(fci);
-       break;
-       case 'Random Color Every Frame' :
-       cwed=0,fcsc=0;
-        clearInterval(fci); fci=setInterval(fcolori,fds);
-   break;
-   case 'Same As The Snake' :
-   fcsc=1;
-      clearInterval(fci);
-      cwed=0; fci=setInterval(fcolori,fds);
-   break;
+    function handleDeath() {
+        game.gameOver = true;
+        game.paused = true;
+        stopGameLoop();
+        alert(`Game Over!\nYour Score: ${Math.round(game.score)}`);
+        resetGame();
     }
     
-    playstate=1;
-    msf(movespeed, playstate);
-    f('pbutton').innerHTML='Stop';
-    setTimeout(resize,5000);
+    function checkProgress() {
+        if (game.score > game.progressLevels[game.level]) {
+            game.moveSpeed = Math.max(50, game.moveSpeed - 10); // Speed up, with a max speed
+            game.level++;
+            startGameLoop(); // Restart with new speed
+        }
+    }
 
- }
-
-//play&stop the game
-function playstatef(w) {
-var sets=f('sets'),pbutton=f('pbutton');
-
-   if(playstate==1) {
-      playstate=0;
-      msf(movespeed, playstate);
-if(w==0 || w==undefined) {
-      sets.style.visibility='visible';
-      }
-       pbutton.innerHTML='Play';
-   }
-
-}
-
-function changelength(v) {
- len=v;
- updatedivvalues();
- sposx.splice(v,sposx.length);
- sposy.splice(v,sposy.length);
-}
-
-var hts=1,hackd=f('hackd');
-function hacktap() {
+    // --- UI and Event Handlers ---
+    function updateUI() {
+        dom.leng.innerHTML = `Length </br>${game.snake.body.length}`;
+        dom.score.innerHTML = `Lvl ${game.level} Score </br>${Math.round(game.score)}`;
+    }
     
- playstatef(1);
- if(hts) {
-   hackd.style.visibility='hidden';
-   hts=0;
-   playstate=1;
-   msf(movespeed, playstate);
-   f('pbutton').innerHTML='Stop';
- }
- else {
-   hackd.style.visibility='visible';
-   hts=1;
-   playstate=0;
-   msf(movespeed, playstate);
-   f('pbutton').innerHTML='Play';
- }
-}
+    function changeDirection(newDir) {
+        const opposite = { 'left': 'right', 'right': 'left', 'up': 'down', 'down': 'up' };
+        if (!game.paused && newDir !== opposite[game.lastDirection]) {
+            game.direction = newDir;
+            if (game.settings.colorStyle === 'Random Color On Click') game.snake.color = randomColor();
+        }
+    }
 
-function updatedivvalues() {
+    function togglePause() {
+        if(game.gameOver) {
+            applySettings();
+            return;
+        }
+        
+        game.paused = !game.paused;
+        if (game.paused) {
+            dom.pButton.innerHTML = 'Resume';
+            dom.sets.style.visibility = 'visible';
+        } else {
+            // If resuming without applying settings, just hide the menu
+            applySettings(); // Apply settings also handles resuming
+            dom.sets.style.visibility = 'hidden';
+            dom.pButton.innerHTML = 'Pause'; 
+        }
+    }
+
+    function applySettings() {
+        game.settings.colorStyle = dom.colorStyle.value;
+        clearInterval(game.intervals.color);
+        if (game.settings.colorStyle === '1 Color') game.snake.color = dom.selectColor.value;
+        else if (game.settings.colorStyle === 'Random Color Every Frame') {
+            game.intervals.color = setInterval(() => game.snake.color = randomColor(), game.settings.frameRate);
+        }
+
+        game.settings.snakeStyle = dom.sstyleSelect.value;
+        game.snake.shape = (game.settings.snakeStyle === 'Circle') ? 'circle' : 'box';
+
+        game.settings.foodColorStyle = dom.fcsse.value;
+        clearInterval(game.intervals.foodColor);
+        if(game.settings.foodColorStyle === 'Color') game.food.color = dom.fce.value;
+        else if (game.settings.foodColorStyle === 'Same As The Snake') {
+            game.intervals.foodColor = setInterval(() => game.food.color = game.snake.color, game.settings.frameRate);
+        } else if (game.settings.foodColorStyle === 'Random Color Every Frame') {
+            game.intervals.foodColor = setInterval(() => game.food.color = randomColor(), game.settings.frameRate);
+        }
+        
+        dom.sets.style.visibility = 'hidden';
+        if (game.gameOver || game.paused) {
+            game.gameOver = false;
+            game.paused = false;
+            startGameLoop();
+            dom.pButton.innerHTML = 'Pause';
+        }
+        dom.pButton.style.visibility = 'visible';
+    }
     
-   speedd.innerHTML='Speed: '+movespeed;
-  f('lengthd').innerHTML='Length: '+len;
-  f('leng').innerHTML='Length </br>'+len;
+    function handleResize() {
+        // Set logical size
+        const logicalWidth = 800;
+        const logicalHeight = 600;
 
-  lengthe.value=len;
-  speede.value=movespeed;
+        dom.canvas.width = logicalWidth;
+        dom.canvas.height = logicalHeight;
+
+        // Scale visually
+        const container = dom.fc.parentElement; // Use the main body for aspect ratio scaling
+        const ratio = logicalWidth / logicalHeight;
+        
+        let newWidth = container.clientWidth;
+        let newHeight = container.clientHeight;
+
+        if (newWidth / newHeight > ratio) {
+            newWidth = newHeight * ratio;
+        } else {
+            newHeight = newWidth / ratio;
+        }
+        
+        dom.fc.style.width = `${newWidth}px`;
+        dom.fc.style.height = `${newHeight}px`;
+
+        // Recalculate game element sizes based on new logical canvas size
+        game.snake.sclx = ptp(0, 3.8);
+        game.snake.scly = game.snake.sclx; // Keep snake blocks square
+        game.snake.r = game.snake.sclx / 2;
+
+        draw(); // Redraw with new sizes
+    }
+
+    // --- Main Loop ---
+    let lastFrameTime = 0;
+    let fps = 0;
+    function gameLoop(timestamp) {
+        // Calculate FPS
+        if (timestamp - lastFrameTime >= 500) {
+            dom.fpsc.innerHTML = `${fps * 2} FPS`;
+            fps = 0;
+            lastFrameTime = timestamp;
+        }
+        fps++;
+
+        if (!game.paused) {
+            draw();
+        }
+        requestAnimationFrame(gameLoop);
+    }
     
-}
+    function startGameLoop() {
+        clearInterval(game.intervals.move);
+        game.intervals.move = setInterval(moveSnake, game.moveSpeed);
+    }
+
+    function stopGameLoop() {
+        clearInterval(game.intervals.move);
+    }
 
 
-var fcs=f('fc').style,cs=c.style
-function resize() {
-  
-fcs.width='100%';
-fcs.height='100%';
-cs.width=ptp(0,100);
-cs.height=ptp(1,80);
-c.width=ptp(0,100);
-c.height=ptp(1,80);
-cx.fillStyle='#91f';
-cs.backgroundColor='black';
-}
+    // --- Initialization ---
+    function init() {
+        ['left', 'up', 'down', 'right'].forEach(dir => {
+            document.getElementById(`${dir}b`).addEventListener('click', () => changeDirection(dir));
+        });
+        
+        window.addEventListener('keydown', e => {
+            const keyMap = { 'ArrowUp': 'up', 'w': 'up', 'ArrowDown': 'down', 's': 'down', 'ArrowLeft': 'left', 'a': 'left', 'ArrowRight': 'right', 'd': 'right' };
+            if(keyMap[e.key]) {
+                e.preventDefault(); // Prevent arrow keys from scrolling the page
+                changeDirection(keyMap[e.key]);
+            }
+        });
 
+        dom.pButton.addEventListener('click', togglePause);
+        dom.startB.addEventListener('click', applySettings);
+        window.addEventListener('resize', handleResize);
+
+        handleResize(); // Initial size calculation
+        calculateProgressLevels();
+        resetGame();
+        requestAnimationFrame(gameLoop);
+    }
+
+    window.addEventListener('load', init);
+
+})();
  </script>
- 
-  <script>
-    
- var config = {
-    apiKey: "AIzaSyDsnZ4Kmgx7X8byXQVubqmZhA_F-b_Cqgw",
-    authDomain: "the-snake-9d17e.firebaseapp.com",
-    databaseURL: "https://the-snake-9d17e.firebaseio.com",
-    storageBucket: "the-snake-9d17e.appspot.com",
-    messagingSenderId: "211094563987"
-  };
-  firebase.initializeApp(config);
-    
-    </script>
-    
 </body>
 </html>
-//test
