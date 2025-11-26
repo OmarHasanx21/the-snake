@@ -490,7 +490,11 @@
     }
     
     function changeDirection(newDir) {
-        if (!game.paused && newDir !== OPPOSITE_DIRECTIONS[game.lastDirection]) {
+        // Allow turning away from a wall even if it's the opposite of the last move.
+        // This prevents "unfair" deaths when hugging a wall.
+        const isOpposite = newDir === OPPOSITE_DIRECTIONS[game.lastDirection];
+
+        if (!game.paused && !isOpposite) {
             game.direction = newDir;
             if (game.settings.colorStyle === 'Random Color On Click') game.snake.color = randomColor();
         }
