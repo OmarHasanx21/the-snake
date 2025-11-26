@@ -12,12 +12,24 @@
     <div id='fc'>
         <div class="game-info">
             <div id='fpsc'>0 FPS</div>
-            <div id='score'>Lvl 0 Score </br>0</div>
+            <div id='score-display'>
+                <div id='score'>Lvl 0 Score </br>0</div>
+                <div id='high-score'>High Score: 0</div>
+            </div>
             <div id='leng'>Length </br>0</div>
+            <div id="powerup-timer"></div>
         </div>
 
         <canvas id='canvas1'></canvas>
+        <div id="game-over-overlay" style="display: none;">
+            <div id="game-over-title">Game Over</div>
+            <div id="final-score"></div>
+            <button id="restart-button">Restart</button>
+        </div>
+        <button id='fullscreenb' class='control-button'>Fullscreen</button>
+
         <div id='pbutton'>Pause</div>
+        <button id="mute-button" class="control-button">Mute</button>
 
         <div class="controls-container">
             <button id='upb' class='control-button'>Up</button>
@@ -70,6 +82,28 @@
             <input type='color' id='fce' value='#9010ff'>
         </div>
 
+        <hr id="sline">
+
+        <div class="setting-group">
+            <label for="difficulty-select">Difficulty</label>
+            <select id="difficulty-select">
+                <option value="150">Easy</option>
+                <option value="100" selected>Medium</option>
+                <option value="75">Hard</option>
+            </select>
+        </div>
+
+        <hr id="sline">
+
+        <div class="setting-group">
+            <label for="framerate-select">Frame Rate</label>
+            <select id="framerate-select">
+                <option value="30">30 FPS</option>
+                <option value="60" selected>60 FPS</option>
+                <option value="0">Unlimited</option>
+            </select>
+        </div>
+
         <button id='startb'>Apply</button>
     </div>
 
@@ -84,17 +118,26 @@
         leng: document.getElementById('leng'),
         score: document.getElementById('score'),
         pButton: document.getElementById('pbutton'),
+        powerUpTimer: document.getElementById('powerup-timer'),
         sets: document.getElementById('sets'),
         startB: document.getElementById('startb'),
+        highScoreDisplay: document.getElementById('high-score'),
+        muteButton: document.getElementById('mute-button'),
+        gameOverOverlay: document.getElementById('game-over-overlay'),
+        finalScore: document.getElementById('final-score'),
+        restartButton: document.getElementById('restart-button'),
         leftB: document.getElementById('leftb'),
         upB: document.getElementById('upb'),
         downB: document.getElementById('downb'),
         rightB: document.getElementById('rightb'),
+        fullscreenB: document.getElementById('fullscreenb'),
         colorStyle: document.getElementById('colorstyle'),
         selectColor: document.getElementById('selectcolor'),
         sstyleSelect: document.getElementById('sstyle-select'),
         fcsse: document.getElementById('fcsse'),
-        fce: document.getElementById('fce')
+        fce: document.getElementById('fce'),
+        difficultySelect: document.getElementById('difficulty-select'),
+        framerateSelect: document.getElementById('framerate-select')
     };
 
     const ctx = dom.canvas.getContext('2d');
@@ -111,17 +154,18 @@
             shape: 'box',
             color: '#9910ff',
         },
-        food: {
+        currentItem: { // Was previously 'food'
+            type: 'food', // 'food', 'bonus', 'slowmo'
             x: 0,
             y: 0,
             sclx: 0,
             scly: 0,
             color: '#9010ff',
+            symbol: ''
         },
         score: 0,
+        highScore: 0,
         level: 0,
-        moveSpeed: 250,
-        initialMoveSpeed: 250,
         direction: 'right',
         lastDirection: 'right',
         paused: true,
@@ -130,21 +174,42 @@
             colorStyle: '1 Color',
             foodColorStyle: 'Color',
             snakeStyle: 'Boxes',
-            frameRate: 10, // for color updates
+            difficulty: 100, // Base move speed in ms
+            moveSpeed: 100,  // Current move speed in ms
+            frameRateCap: 60 // Target FPS
         },
         intervals: {
             move: null,
             color: null,
             foodColor: null
         },
-        progressLevels: []
+        progressLevels: [],
+        audio: {
+            eat: null,
+            gameOver: null,
+            click: null
+        },
+        soundEnabled: true,
+        powerUp: {
+            active: false,
+            type: null,
+            timerId: null, // To store the setTimeout ID
+            duration: 0
+        }
     };
 
     // --- Constants ---
     const INITIAL_SNAKE_LENGTH = 4;
-    const SNAKE_SPEED_X_BOX = 4.1;
-    const SNAKE_SPEED_Y_BOX = 4.0; // This is unused, can be removed
     const PI_2 = Math.PI * 2;
+
+    const DIRECTIONS = {
+        UP: 'up',
+        DOWN: 'down',
+        LEFT: 'left',
+        RIGHT: 'right'
+    };
+
+    const OPPOSITE_DIRECTIONS = { [DIRECTIONS.UP]: DIRECTIONS.DOWN, [DIRECTIONS.DOWN]: DIRECTIONS.UP, [DIRECTIONS.LEFT]: DIRECTIONS.RIGHT, [DIRECTIONS.RIGHT]: DIRECTIONS.LEFT };
 
 
     // --- Utility Functions ---
@@ -168,18 +233,39 @@
         return `rgb(${rn(40, 255)},${rn(40, 255)},${rn(40, 255)})`;
     }
 
+    function playSound(sound) {
+        if (game.soundEnabled && sound) {
+            sound.currentTime = 0;
+            sound.play().catch(e => console.log("Sound play interrupted."));
+        }
+    }
+
+    // --- Data Persistence ---
+    function loadHighScore() {
+        const savedScore = localStorage.getItem('snakeHighScore');
+        game.highScore = savedScore ? parseInt(savedScore, 10) : 0;
+    }
+
+    function saveHighScore() {
+        if (game.score > game.highScore) {
+            game.highScore = game.score;
+            localStorage.setItem('snakeHighScore', game.highScore);
+        }
+    }
 
     // --- Game Setup and Initialization ---
     function initSnake() {
         game.snake.body = [];
-        const startX = ptp(0, 20);
-        const startY = ptp(1, 50); // Center vertically
-        game.snake.sclx = ptp(0, 3.8);
+        game.snake.sclx = ptp(0, 4); // Use a rounder number for grid alignment
+        
+        // CRITICAL FIX: Ensure the snake starts perfectly on the grid.
+        const startGridX = Math.floor(ptp(0, 20) / game.snake.sclx);
+        const startGridY = Math.floor(ptp(1, 50) / game.snake.sclx);
 
         for (let i = 0; i < INITIAL_SNAKE_LENGTH; i++) {
             game.snake.body.push({
-                x: startX - (i * game.snake.sclx),
-                y: startY
+                x: (startGridX - i) * game.snake.sclx,
+                y: startGridY * game.snake.sclx
             });
         }
     }
@@ -199,66 +285,114 @@
         game.paused = true;
         game.score = 0;
         game.level = 0;
-        game.moveSpeed = game.initialMoveSpeed;
+        loadHighScore();
         game.direction = 'right';
         game.lastDirection = 'right';
         
         initSnake();
-        spawnFood();
+        spawnItem();
         updateUI();
 
         dom.pButton.style.visibility = 'hidden';
         dom.sets.style.visibility = 'visible';
         dom.pButton.innerHTML = 'Play';
+        // Clear any running color intervals from a previous game
+        clearInterval(game.intervals.color);
+        clearInterval(game.intervals.foodColor);
+        clearTimeout(game.powerUp.timerId);
+        dom.gameOverOverlay.style.display = 'none';
     }
 
     // --- Drawing ---
     function draw() {
         ctx.clearRect(0, 0, dom.canvas.width, dom.canvas.height);
         
-        // Draw Food
-        ctx.fillStyle = game.food.color;
-        ctx.shadowColor = game.food.color;
+        // Draw current item (Food or Power-up)
+        ctx.fillStyle = game.currentItem.color;
+        ctx.shadowColor = game.currentItem.color;
         ctx.shadowBlur = 15;
-        ctx.fillRect(game.food.x, game.food.y, game.food.sclx, game.food.scly);
+        ctx.fillRect(game.currentItem.x, game.currentItem.y, game.currentItem.sclx, game.currentItem.scly);
+
+        // Draw symbol on power-ups
+        if (game.currentItem.symbol) {
+            ctx.font = `bold ${game.currentItem.sclx * 0.8}px sans-serif`;
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowBlur = 0;
+            ctx.fillText(game.currentItem.symbol, game.currentItem.x + game.currentItem.sclx / 2, game.currentItem.y + game.currentItem.scly / 2 + 2);
+        }
         
         // Draw Snake
         ctx.fillStyle = game.snake.color;
         ctx.shadowBlur = 0;
         game.snake.body.forEach(segment => {
             ctx.beginPath();
-            if (game.snake.shape === 'circle') {
+            if (game.snake.shape === 'circle') { // Circle style
                 ctx.arc(segment.x + game.snake.r, segment.y + game.snake.r, game.snake.r, 0, PI_2);
-            } else {
+            } else { // Box style
                 ctx.rect(segment.x, segment.y, game.snake.sclx, game.snake.scly);
             }
             ctx.fill();
         });
+        if (game.snake.shape === 'normal') { // For 'Normal' style, draw connecting rectangles
+            drawSnakeConnectors();
+        }
     }
 
     // --- Game Logic ---
-    function spawnFood() {
+    function spawnItem() { // Renamed from spawnFood
         let validPosition = false;
-        let x, y, sclx, scly;
+        let x, y;
+        const scl = game.snake.sclx;
 
         while (!validPosition) {
             validPosition = true;
             // Align food to the same grid as the snake
-            x = Math.floor(rn(0, dom.canvas.width / game.snake.sclx)) * game.snake.sclx;
-            y = Math.floor(rn(0, dom.canvas.height / game.snake.scly)) * game.snake.scly;
-            sclx = game.snake.sclx;
-            scly = sclx; // Keep food square
+            x = Math.floor(rn(0, dom.canvas.width / scl)) * scl;
+            y = Math.floor(rn(0, dom.canvas.height / scl)) * scl;
 
             // Check if food spawns on the snake
             for (const segment of game.snake.body) {
-                if (x < segment.x + game.snake.sclx && x + sclx > segment.x &&
-                    y < segment.y + game.snake.scly && y + scly > segment.y) {
+                if (x === segment.x && y === segment.y) {
                     validPosition = false;
                     break;
                 }
             }
         }
-        game.food = { x, y, sclx, scly, color: game.food.color };
+
+        // Decide whether to spawn food or a power-up
+        const rand = Math.random();
+        if (rand < 0.1 && !game.powerUp.active) { // 10% chance for Bonus, don't spawn if another is active
+            game.currentItem = { type: 'bonus', x, y, sclx: scl, scly: scl, color: '#FFD700', symbol: '★' };
+        } else if (rand < 0.2 && !game.powerUp.active) { // 10% chance for Slow-Mo
+            game.currentItem = { type: 'slowmo', x, y, sclx: scl, scly: scl, color: '#87CEEB', symbol: '◷' };
+        } else { // Default to regular food
+            game.currentItem = { type: 'food', x, y, sclx: scl, scly: scl, color: game.currentItem.color, symbol: '' };
+        }
+    }
+
+    function activatePowerUp(type) {
+        clearTimeout(game.powerUp.timerId); // Clear any existing power-up
+        dom.powerUpTimer.style.display = 'none';
+
+        game.powerUp.type = type;
+        game.powerUp.active = true;
+        
+        if (type === 'slowmo') { // Handle slow-mo power-up
+            game.powerUp.duration = 5000; // 5 seconds
+            game.settings.moveSpeed *= 2; // Slow down
+            game.powerUp.timerId = setTimeout(deactivatePowerUp, game.powerUp.duration);
+        }
+    }
+
+    function deactivatePowerUp() {
+        if (game.powerUp.type === 'slowmo') {
+            game.settings.moveSpeed = game.settings.difficulty; // Reset to the current base difficulty speed
+        }
+        game.powerUp.active = false;
+        game.powerUp.type = null;
+        dom.powerUpTimer.style.display = 'none';
     }
     
     function moveSnake() {
@@ -269,10 +403,10 @@
         const speed = game.snake.sclx; // Move one block at a time
 
         switch (game.direction) {
-            case 'right': head.x += speed; break;
-            case 'left': head.x -= speed; break;
-            case 'up': head.y -= speed; break;
-            case 'down': head.y += speed; break;
+            case DIRECTIONS.RIGHT: head.x += speed; break;
+            case DIRECTIONS.LEFT:  head.x -= speed; break;
+            case DIRECTIONS.UP:    head.y -= speed; break;
+            case DIRECTIONS.DOWN:  head.y += speed; break;
         }
         game.lastDirection = game.direction;
 
@@ -284,22 +418,32 @@
         
         game.snake.body.unshift(head);
 
-        if (head.x < game.food.x + game.food.sclx && head.x + game.snake.sclx > game.food.x &&
-            head.y < game.food.y + game.food.scly && head.y + game.snake.scly > game.food.y) { // Food collision
+        // Item collision check (previously food collision)
+        if (head.x === game.currentItem.x && head.y === game.currentItem.y) {
+            playSound(game.audio.eat);
             
-            game.score += 10;
+            if (game.currentItem.type === 'bonus') {
+                game.score += 50;
+            } else if (game.currentItem.type === 'slowmo') {
+                activatePowerUp('slowmo');
+                game.score += 10; // Still give some points
+            } else { // Regular food
+                game.score += 10;
+            }
+
             checkProgress();
-            spawnFood();
+            spawnItem();
             
             if (game.settings.colorStyle === 'Random Color When Eating Food') game.snake.color = randomColor();
-            if (game.settings.foodColorStyle === 'Random Color') game.food.color = randomColor();
+            // Only change color for regular food items
+            if (game.currentItem.type === 'food' && game.settings.foodColorStyle === 'Random Color') game.currentItem.color = randomColor();
         } else {
             game.snake.body.pop();
         }
         
         // Self-collision check
         for (let i = 1; i < game.snake.body.length; i++) {
-            if (Math.abs(head.x - game.snake.body[i].x) < 1 && Math.abs(head.y - game.snake.body[i].y) < 1) {
+            if (head.x === game.snake.body[i].x && head.y === game.snake.body[i].y) {
                 handleDeath();
                 return;
             }
@@ -312,16 +456,22 @@
     function handleDeath() {
         game.gameOver = true;
         game.paused = true;
-        stopGameLoop();
-        alert(`Game Over!\nYour Score: ${Math.round(game.score)}`);
-        resetGame();
+        clearTimeout(game.powerUp.timerId); // Stop any active power-up timers
+        playSound(game.audio.gameOver);
+        saveHighScore();
+        dom.finalScore.textContent = `Your Score: ${Math.round(game.score)}`;
+        dom.gameOverOverlay.style.display = 'flex';
+        // resetGame() will be called on restart button click
     }
     
     function checkProgress() {
         if (game.score > game.progressLevels[game.level]) {
-            game.moveSpeed = Math.max(50, game.moveSpeed - 10); // Speed up, with a max speed
+            game.settings.difficulty = Math.max(40, game.settings.difficulty - 5); // Increase base speed difficulty
+            if (!game.powerUp.active || game.powerUp.type !== 'slowmo') {
+                // Only update current speed if a slow-mo powerup isn't active
+                game.settings.moveSpeed = game.settings.difficulty;
+            }
             game.level++;
-            startGameLoop(); // Restart with new speed
         }
     }
 
@@ -329,11 +479,18 @@
     function updateUI() {
         dom.leng.innerHTML = `Length </br>${game.snake.body.length}`;
         dom.score.innerHTML = `Lvl ${game.level} Score </br>${Math.round(game.score)}`;
+        dom.highScoreDisplay.textContent = `High Score: ${game.highScore}`;
+
+        if (game.powerUp.active && game.powerUp.type === 'slowmo') { // Show timer UI
+            dom.powerUpTimer.style.display = 'block';
+            dom.powerUpTimer.textContent = 'Slow-Mo!';
+        } else {
+            dom.powerUpTimer.style.display = 'none';
+        }
     }
     
     function changeDirection(newDir) {
-        const opposite = { 'left': 'right', 'right': 'left', 'up': 'down', 'down': 'up' };
-        if (!game.paused && newDir !== opposite[game.lastDirection]) {
+        if (!game.paused && newDir !== OPPOSITE_DIRECTIONS[game.lastDirection]) {
             game.direction = newDir;
             if (game.settings.colorStyle === 'Random Color On Click') game.snake.color = randomColor();
         }
@@ -349,8 +506,11 @@
         if (game.paused) {
             dom.pButton.innerHTML = 'Resume';
             dom.sets.style.visibility = 'visible';
+            // Clear color intervals when paused to save performance
+            clearInterval(game.intervals.color);
+            clearInterval(game.intervals.foodColor);
         } else {
-            // If resuming without applying settings, just hide the menu
+            // When resuming, we always apply settings to ensure consistency.
             applySettings(); // Apply settings also handles resuming
             dom.sets.style.visibility = 'hidden';
             dom.pButton.innerHTML = 'Pause'; 
@@ -358,63 +518,109 @@
     }
 
     function applySettings() {
+        playSound(game.audio.click);
+        
+        game.settings.difficulty = parseInt(dom.difficultySelect.value, 10); // Read difficulty
+        // Only change moveSpeed if a power-up is not active
+        if (!game.powerUp.active || game.powerUp.type !== 'slowmo') {
+            game.settings.moveSpeed = game.settings.difficulty; // Set current speed to selected difficulty
+        }
+
+        game.settings.frameRateCap = parseInt(dom.framerateSelect.value, 10);
+        // If the framerate setting changed, we need to restart the game loop manager
+        // This is a non-visual change but important for the setting to apply instantly.
+        manageGameLoop();
+
         game.settings.colorStyle = dom.colorStyle.value;
         clearInterval(game.intervals.color);
         if (game.settings.colorStyle === '1 Color') game.snake.color = dom.selectColor.value;
-        else if (game.settings.colorStyle === 'Random Color Every Frame') {
-            game.intervals.color = setInterval(() => game.snake.color = randomColor(), game.settings.frameRate);
+        else if (game.settings.colorStyle === 'Random Color Every Frame') { // This interval is very fast, ~16ms for 60fps
+            game.intervals.color = setInterval(() => game.snake.color = randomColor(), 1000 / game.settings.frameRateCap);
         }
 
         game.settings.snakeStyle = dom.sstyleSelect.value;
-        game.snake.shape = (game.settings.snakeStyle === 'Circle') ? 'circle' : 'box';
+        // FIX: Correctly assign shape based on selection
+        if (game.settings.snakeStyle === 'Circle') {
+            game.snake.shape = 'circle';
+        } else if (game.settings.snakeStyle === 'Normal') {
+            game.snake.shape = 'normal';
+        } else { // Boxes
+            game.snake.shape = 'box';
+        }
 
         game.settings.foodColorStyle = dom.fcsse.value;
         clearInterval(game.intervals.foodColor);
-        if(game.settings.foodColorStyle === 'Color') game.food.color = dom.fce.value;
-        else if (game.settings.foodColorStyle === 'Same As The Snake') {
-            game.intervals.foodColor = setInterval(() => game.food.color = game.snake.color, game.settings.frameRate);
-        } else if (game.settings.foodColorStyle === 'Random Color Every Frame') {
-            game.intervals.foodColor = setInterval(() => game.food.color = randomColor(), game.settings.frameRate);
+        if(game.settings.foodColorStyle === 'Color') game.currentItem.color = dom.fce.value;
+        else if (game.settings.foodColorStyle === 'Same As The Snake') { // This interval is very fast
+            game.intervals.foodColor = setInterval(() => game.currentItem.color = game.snake.color, 1000 / game.settings.frameRateCap);
+        } else if (game.settings.foodColorStyle === 'Random Color Every Frame') { // This interval is very fast
+            game.intervals.foodColor = setInterval(() => game.currentItem.color = randomColor(), 1000 / game.settings.frameRateCap);
         }
         
         dom.sets.style.visibility = 'hidden';
         if (game.gameOver || game.paused) {
             game.gameOver = false;
             game.paused = false;
-            startGameLoop();
+            // This call is crucial to apply speed changes
             dom.pButton.innerHTML = 'Pause';
         }
         dom.pButton.style.visibility = 'visible';
     }
     
+    function drawSnakeConnectors() {
+        if (game.snake.body.length < 2) return;
+        ctx.fillStyle = game.snake.color;
+        ctx.shadowBlur = 0;
+
+        for (let i = 0; i < game.snake.body.length - 1; i++) {
+            const current = game.snake.body[i];
+            const next = game.snake.body[i + 1];
+
+            if (current.x === next.x) { // Vertical connection
+                const y = Math.min(current.y, next.y) + game.snake.r;
+                ctx.fillRect(current.x, y, game.snake.sclx, game.snake.scly);
+            } else if (current.y === next.y) { // Horizontal connection
+                const x = Math.min(current.x, next.x) + game.snake.r;
+                ctx.fillRect(x, current.y, game.snake.sclx, game.snake.scly);
+            }
+        }
+    }
+
     function handleResize() {
         // Set logical size
-        const logicalWidth = 800;
-        const logicalHeight = 600;
+        const logicalWidth = 800; // The game's internal resolution
+        const logicalHeight = 600; 
 
         dom.canvas.width = logicalWidth;
         dom.canvas.height = logicalHeight;
 
         // Scale visually
-        const container = dom.fc.parentElement; // Use the main body for aspect ratio scaling
+        const container = document.body;
         const ratio = logicalWidth / logicalHeight;
         
         let newWidth = container.clientWidth;
         let newHeight = container.clientHeight;
 
+        // Fit to screen while maintaining aspect ratio (letterboxing)
         if (newWidth / newHeight > ratio) {
             newWidth = newHeight * ratio;
         } else {
             newHeight = newWidth / ratio;
         }
         
-        dom.fc.style.width = `${newWidth}px`;
-        dom.fc.style.height = `${newHeight}px`;
+        dom.fc.style.width = newWidth + 'px';
+        dom.fc.style.height = newHeight + 'px';
 
         // Recalculate game element sizes based on new logical canvas size
-        game.snake.sclx = ptp(0, 3.8);
+        game.snake.sclx = ptp(0, 4); // 4% of 800 = 32px. This creates a 25x18.75 grid.
         game.snake.scly = game.snake.sclx; // Keep snake blocks square
         game.snake.r = game.snake.sclx / 2;
+
+        // On resize, it's a good idea to reset the snake to avoid visual glitches
+        if (!game.gameOver) {
+            initSnake();
+            spawnItem(); // Use new item spawner
+        }
 
         draw(); // Redraw with new sizes
     }
@@ -422,53 +628,130 @@
     // --- Main Loop ---
     let lastFrameTime = 0;
     let fps = 0;
+    let lastRenderTime = 0; // For FPS capping
+    let lastMoveTime = 0;   // For snake movement timing
+
     function gameLoop(timestamp) {
+        // If we are in unlimited mode, timestamp will be undefined, so we use performance.now()
+        const currentTime = timestamp || performance.now();
+        
+        const frameTime = 1000 / game.settings.frameRateCap;
+        const elapsed = timestamp - lastRenderTime;
+
+        // Cap the frame rate unless it's set to unlimited (0)
+        if (game.settings.frameRateCap > 0 && elapsed < frameTime) {
+            return;
+        }
+        lastRenderTime = currentTime;
+
         // Calculate FPS
-        if (timestamp - lastFrameTime >= 500) {
+        if (currentTime - lastFrameTime >= 500) {
             dom.fpsc.innerHTML = `${fps * 2} FPS`;
             fps = 0;
-            lastFrameTime = timestamp;
+            lastFrameTime = currentTime;
         }
         fps++;
+
+        // Move the snake based on its own timer, independent of frame rate
+        if (!game.paused && currentTime - lastMoveTime >= game.settings.moveSpeed) {
+            moveSnake();
+            lastMoveTime = currentTime;
+        }
 
         if (!game.paused) {
             draw();
         }
-        requestAnimationFrame(gameLoop);
     }
-    
-    function startGameLoop() {
-        clearInterval(game.intervals.move);
-        game.intervals.move = setInterval(moveSnake, game.moveSpeed);
-    }
-
-    function stopGameLoop() {
-        clearInterval(game.intervals.move);
-    }
-
-
-    // --- Initialization ---
-    function init() {
-        ['left', 'up', 'down', 'right'].forEach(dir => {
-            document.getElementById(`${dir}b`).addEventListener('click', () => changeDirection(dir));
-        });
-        
+    // --- Event Listeners Setup ---
+    function setupEventListeners() {
+        // Keyboard controls
         window.addEventListener('keydown', e => {
-            const keyMap = { 'ArrowUp': 'up', 'w': 'up', 'ArrowDown': 'down', 's': 'down', 'ArrowLeft': 'left', 'a': 'left', 'ArrowRight': 'right', 'd': 'right' };
+            const keyMap = { 'ArrowUp': DIRECTIONS.UP, 'w': DIRECTIONS.UP, 'ArrowDown': DIRECTIONS.DOWN, 's': DIRECTIONS.DOWN, 'ArrowLeft': DIRECTIONS.LEFT, 'a': DIRECTIONS.LEFT, 'ArrowRight': DIRECTIONS.RIGHT, 'd': DIRECTIONS.RIGHT };
             if(keyMap[e.key]) {
                 e.preventDefault(); // Prevent arrow keys from scrolling the page
                 changeDirection(keyMap[e.key]);
             }
         });
 
+        // On-screen button controls
+        dom.upB.addEventListener('click', () => changeDirection(DIRECTIONS.UP));
+        dom.downB.addEventListener('click', () => changeDirection(DIRECTIONS.DOWN));
+        dom.leftB.addEventListener('click', () => changeDirection(DIRECTIONS.LEFT));
+        dom.rightB.addEventListener('click', () => changeDirection(DIRECTIONS.RIGHT));
+
+        // Game state buttons
         dom.pButton.addEventListener('click', togglePause);
         dom.startB.addEventListener('click', applySettings);
-        window.addEventListener('resize', handleResize);
+        dom.restartButton.addEventListener('click', () => {
+            playSound(game.audio.click);
+            resetGame();
+        });
 
-        handleResize(); // Initial size calculation
+        // Fullscreen for mobile
+        dom.fullscreenB.addEventListener('click', async () => {
+            const elem = document.documentElement;
+            try {
+                if (document.fullscreenElement) {
+                    await document.exitFullscreen();
+                } else {
+                    await elem.requestFullscreen();
+                    // Try to lock orientation for a better mobile experience
+                    if (screen.orientation && screen.orientation.lock) {
+                        await screen.orientation.lock('landscape');
+                    }
+                }
+            } catch (err) {
+                console.error(`Fullscreen Error: ${err.message} (${err.name})`);
+            }
+        });
+
+        // Mute button
+        dom.muteButton.addEventListener('click', () => {
+            game.soundEnabled = !game.soundEnabled;
+            dom.muteButton.textContent = game.soundEnabled ? 'Mute' : 'Unmute';
+            dom.muteButton.classList.toggle('muted', !game.soundEnabled);
+        });
+
+        window.addEventListener('resize', handleResize);
+    }
+
+    function loadAudio() {
+        game.audio.eat = new Audio('sounds/eat.mp3');
+        game.audio.gameOver = new Audio('sounds/gameOver.mp3');
+        game.audio.click = new Audio('sounds/click.mp3');
+    }
+
+    // --- Game Loop Management ---
+    let gameLoopId = null;
+    function manageGameLoop() {
+        // Clear any existing loop
+        if (gameLoopId) {
+            cancelAnimationFrame(gameLoopId);
+            clearInterval(gameLoopId);
+        }
+
+        if (game.settings.frameRateCap > 0) {
+            // Use requestAnimationFrame for capped FPS (smoother, better for battery)
+            const runLoop = (timestamp) => {
+                gameLoop(timestamp);
+                gameLoopId = requestAnimationFrame(runLoop);
+            };
+            gameLoopId = requestAnimationFrame(runLoop);
+        } else {
+            // Use setInterval for unlimited FPS
+            gameLoopId = setInterval(gameLoop, 0);
+        }
+    }
+
+    // --- Initialization ---
+    function init() {
+        setupEventListeners();
+        loadAudio();
+        loadHighScore();
+        manageGameLoop(); // Start the main game loop
+        handleResize(); // Initial size calculation and first draw
         calculateProgressLevels();
         resetGame();
-        requestAnimationFrame(gameLoop);
     }
 
     window.addEventListener('load', init);
